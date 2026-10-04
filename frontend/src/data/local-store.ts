@@ -57,3 +57,33 @@ export function resetRows(key: string): EntryRow[] {
 export function storageKey(): string {
   return STORAGE_KEY
 }
+
+// 暂存区、待核事项等独立数据块用各自的 key 存放，和正式清单互不干扰。
+const blobCache = new Map<string, unknown>()
+
+export function readBlob<T>(key: string, fallback: T): T {
+  if (blobCache.has(key)) {
+    return clone(blobCache.get(key)) as T
+  }
+  let value = fallback
+  if (typeof window !== 'undefined' && window.localStorage) {
+    const raw = window.localStorage.getItem(key)
+    if (raw) {
+      try {
+        value = JSON.parse(raw) as T
+      } catch {
+        value = fallback
+      }
+    }
+  }
+  blobCache.set(key, value)
+  return clone(value)
+}
+
+export function writeBlob<T>(key: string, value: T): T {
+  blobCache.set(key, value)
+  if (typeof window !== 'undefined' && window.localStorage) {
+    window.localStorage.setItem(key, JSON.stringify(value))
+  }
+  return clone(value)
+}

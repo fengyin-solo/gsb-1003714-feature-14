@@ -24,6 +24,44 @@
       </span>
     </p>
 
+    <!-- 整编入口联动：对泥沙记录生成待核事项，已通过的自动核销。 -->
+    <section class="review-panel">
+      <header class="staging-head">
+        <h3>待核事项（泥沙联动）</h3>
+        <div class="staging-ops">
+          <button class="btn" type="button" @click="syncReviews">联动生成待核事项</button>
+        </div>
+      </header>
+      <p class="staging-tip">
+        待核 {{ reviewStats.pending }} 项 · 已核 {{ reviewStats.resolved }} 项
+        <span v-if="syncMessage" class="sync-msg">{{ syncMessage }}</span>
+      </p>
+      <table v-if="reviewItems.length" class="data-table review-table">
+        <thead>
+          <tr>
+            <th>来源记录</th>
+            <th>站点编号</th>
+            <th>采样时间</th>
+            <th>核对要点</th>
+            <th>状态</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in reviewItems" :key="item.id">
+            <td>{{ item.记录编号 }}（#{{ item.recordId }}）</td>
+            <td>{{ item.站点编号 }}</td>
+            <td>{{ item.采样时间 }}</td>
+            <td>
+              <span v-for="reason in item.reasons" :key="reason" class="reason-tag">{{ reason }}</span>
+              <span v-if="item.note" class="reason-note">缺测说明：{{ item.note }}</span>
+            </td>
+            <td>{{ item.status }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else class="staging-empty">暂无待核事项，点击「联动生成待核事项」按泥沙记录对账</p>
+    </section>
+
     <form class="filter-bar" @submit.prevent="reload">
       <label v-for="field in filterFields" :key="field" class="filter-item">
         <span>{{ field }}</span>
@@ -79,7 +117,12 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
-import type { EntryRow } from '@/data/types'
+import {
+  listReviewItems,
+  reviewSummary,
+  syncSedimentReviewItems,
+} from '@/api/sediment-service'
+import type { EntryRow, ReviewItem } from '@/data/types'
 
 const meta = moduleMeta('compilation')
 const columns = ["成果编号", "整编年份", "站点编号", "整编类型", "原始记录数", "整编人", "审核人", "整编状态"]
@@ -92,6 +135,20 @@ const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+const reviewItems = ref<ReviewItem[]>([])
+const reviewStats = ref({ pending: 0, resolved: 0 })
+const syncMessage = ref('')
+
+function reloadReviews() {
+  reviewItems.value = listReviewItems()
+  reviewStats.value = reviewSummary()
+}
+
+function syncReviews() {
+  const result = syncSedimentReviewItems()
+  syncMessage.value = `已联动：新增 ${result.created} 项待核，核销 ${result.resolved} 项`
+  reloadReviews()
+}
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
@@ -131,7 +188,14 @@ function reload() {
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '数据整编列表读取失败'
   }
+  reloadReviews()
 }
 
-onMounted(reload)
+onMounted(() => {
+  reload()
+  // 进入整编入口即与泥沙记录对账一次，待核事项自动联动生成。
+  const result = syncSedimentReviewItems()
+  syncMessage.value = `已联动：新增 ${result.created} 项待核，核销 ${result.resolved} 项`
+  reloadReviews()
+})
 </script>
