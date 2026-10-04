@@ -69,3 +69,23 @@ npm run build
   `frontend/src/data/seed.ts`。
 - 状态流转只允许在 `local-service.ts` 里改，页面组件不做业务判断。
 - 想回到初始数据：清掉浏览器里 `hydrology-monitor-station:entries` 这一项，或调用 `resetModule(模块)`。
+
+## 泥沙现场记录：暂存 → 提交链路
+
+泥沙监测（`views/sediment`）在通用台账之外多一条现场暂存链路，业务判断集中在
+`frontend/src/api/sediment-service.ts`，暂存数据在 `frontend/src/data/staging-store.ts`：
+
+- **先暂存后提交**：现场登记先落暂存区（localStorage 键
+  `hydrology-monitor-station:sediment-staging`），含沙量、输沙率、颗粒级配可留空、按任意
+  顺序补录；刷新或重新进入页面后在「暂存区」继续编辑。暂存按记录编号唯一，同一份草稿多次
+  暂存沿用已有草稿。
+- **零值规则**：含沙量、输沙率允许填 0，0 作为合法实测值原样保留，不会触发异常标记。
+- **缺级配保留说明**：颗粒级配缺测时必须填写「级配说明」（缺测原因/补测安排），说明随草稿、
+  正式记录和待核事项一起保留。
+- **提交校验**：提交时原子认领草稿（staged → submitting），并发提交、快速连点只有第一次有效，
+  其余提示沿用已有草稿；校验不通过释放回暂存区继续编辑。
+- **通过结论检查**：正式台账里同记录编号若已「已通过」，拒绝重复提交，草稿退回暂存区。
+- **旧样本冲突处理**：同号记录已存在但未通过时，沿用原样本值、不覆盖正式台账，只联动一条
+  「旧样本沿用原值」待核事项；新记录则新建「待审核」记录。两种情况都会在数据整编页
+  （`views/compilation`）生成待核事项，存于 `hydrology-monitor-station:review-items`。
+
